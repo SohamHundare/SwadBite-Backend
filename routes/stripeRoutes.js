@@ -27,8 +27,12 @@ router.post("/create-checkout-session", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: "http://localhost:3000/payment/success",
-      cancel_url: "http://localhost:3000/payment/fail",
+      success_url: "https://swad-bite.vercel.app/payment/success",
+      cancel_url: "https://swad-bite.vercel.app/payment/fail",
+      //for manual way
+
+      // success_url: "http://localhost:3000/payment/success",
+      // cancel_url: "http://localhost:3000/payment/fail",
     });
 
     res.json({ id: session.id });
