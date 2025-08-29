@@ -27,8 +27,8 @@ router.post("/create-checkout-session", async (req, res) => {
         },
       ],
       mode: "payment",
-      success_url: "http://localhost:3000/payment/success",
-      cancel_url: "http://localhost:3000/payment/fail",
+      success_url: "https://swadbite-backend-2.onrender.com/payment/success",
+      cancel_url: "https://swadbite-backend-2.onrender.com/payment/fail",
     });
 
     res.json({ id: session.id });
