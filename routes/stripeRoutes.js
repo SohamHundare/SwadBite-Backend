@@ -9,44 +9,82 @@ dotenv.config();
 const router = express.Router();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-// ----------------- CREATE CHECKOUT SESSION -----------------
+// // ----------------- CREATE CHECKOUT SESSION -----------------
+// router.post("/create-checkout-session", async (req, res) => {
+//   const { amount , userId , items } = req.body; //new ,first had only amount
+
+//   try {
+//     const session = await stripe.checkout.sessions.create({
+//       payment_method_types: ["card"],
+//       line_items: [
+//         {
+//           price_data: {
+//             currency: "inr",
+//             product_data: {
+//               name: "SwadBite Mess Fee",
+//             },
+//             unit_amount: Math.round(amount),
+//           },
+//           quantity: 1,
+//         },
+//       ],
+//       mode: "payment",
+//       //success_url: "https://swadbite-backend-2.onrender.com/payment/success",
+//       //cancel_url: "https://swadbite-backend-2.onrender.com/payment/fail",
+
+//       success_url: "https://swad-bite.vercel.app/payment/success",
+//       cancel_url: "https://swad-bite.vercel.app/payment/fail",
+//     });
+
+//     // Save order in DB as pending //new
+//     const newOrder = new Order({
+//       userId,
+//       items,
+//       amount,
+//       stripeSessionId: session.id,
+//       status: "pending",
+//     });
+
+//     await newOrder.save();
+
+//     res.json({ id: session.id });
+//   } catch (error) {
+//     console.error("Stripe Error:", error);
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 router.post("/create-checkout-session", async (req, res) => {
-  const { amount , userId , items } = req.body; //new ,first had only amount
+  const { amount, userId, items, customerName, isTakeaway } = req.body;
 
   try {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "inr",
-            product_data: {
-              name: "SwadBite Mess Fee",
-            },
-            unit_amount: amount,
-          },
-          quantity: 1,
+      line_items: items.map(item => ({
+        price_data: {
+          currency: "inr",
+          product_data: { name: item.name },
+          unit_amount: Math.round(item.price * 100),
         },
-      ],
+        quantity: item.quantity || 1,
+      })),
       mode: "payment",
-      //success_url: "https://swadbite-backend-2.onrender.com/payment/success",
-      //cancel_url: "https://swadbite-backend-2.onrender.com/payment/fail",
-
       success_url: "https://swad-bite.vercel.app/payment/success",
       cancel_url: "https://swad-bite.vercel.app/payment/fail",
     });
 
-    // Save order in DB as pending //new
     const newOrder = new Order({
       userId,
+      customerName,
+      isTakeaway,
+      paymentMethod: "card",
+      totalAmount: amount / 100,
       items,
-      amount,
       stripeSessionId: session.id,
       status: "pending",
     });
 
     await newOrder.save();
-
     res.json({ id: session.id });
   } catch (error) {
     console.error("Stripe Error:", error);
