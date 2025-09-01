@@ -14,6 +14,8 @@ const orderSchema = new mongoose.Schema(
         price: Number,
       },
     ],
+    stripeSessionId: { type: String }, // new
+    status: { type: String, default: "pending" }, //new
   },
   { timestamps: true }
 );

@@ -13,6 +13,9 @@ const userRoutes = require('./routes/UserRouter');
 
 const app = express();
 
+// Webhook needs raw body
+app.use("/api/stripe/webhook", stripeRoutes); // raw body inside route
+
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
