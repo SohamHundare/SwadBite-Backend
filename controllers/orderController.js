@@ -24,14 +24,17 @@ const createOrder = async (req, res) => {
 const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find();
-    if(orders){
-         res.status(200).json(orders);
+
+    if (!orders || orders.length === 0) {
+      return res.status(404).json({ message: "No orders found" });
     }
-      res.status(400).json({message:"No orders found"})
+
+    return res.status(200).json(orders); // only one response
   } catch (error) {
     console.error("Error fetching orders:", error.message);
-    res.status(500).json({ error: "Internal Server Error" });
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 };
+
 
 module.exports = { createOrder, getAllOrders };
