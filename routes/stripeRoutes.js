@@ -9,88 +9,79 @@ dotenv.config();
 const router = express.Router();
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-// // ----------------- CREATE CHECKOUT SESSION -----------------
-// router.post("/create-checkout-session", async (req, res) => {
-//   const { amount , userId , items } = req.body; //new ,first had only amount
 
-//   try {
-//     const session = await stripe.checkout.sessions.create({
-//       payment_method_types: ["card"],
-//       line_items: [
-//         {
-//           price_data: {
-//             currency: "inr",
-//             product_data: {
-//               name: "SwadBite Mess Fee",
-//             },
-//             unit_amount: Math.round(amount),
-//           },
-//           quantity: 1,
-//         },
-//       ],
-//       mode: "payment",
-//       //success_url: "https://swadbite-backend-2.onrender.com/payment/success",
-//       //cancel_url: "https://swadbite-backend-2.onrender.com/payment/fail",
-
-//       success_url: "https://swad-bite.vercel.app/payment/success",
-//       cancel_url: "https://swad-bite.vercel.app/payment/fail",
-//     });
-
-//     // Save order in DB as pending //new
-//     const newOrder = new Order({
-//       userId,
-//       items,
-//       amount,
-//       stripeSessionId: session.id,
-//       status: "pending",
-//     });
-
-//     await newOrder.save();
-
-//     res.json({ id: session.id });
-//   } catch (error) {
-//     console.error("Stripe Error:", error);
-//     res.status(500).json({ error: error.message });
-//   }
-// });
-
+// routes/stripeRoutes.js (replace the POST handler)
 router.post("/create-checkout-session", async (req, res) => {
-  const { amount, userId, items, customerName, isTakeaway } = req.body;
+  const { amount, userId, items = [], customerName, isTakeaway } = req.body;
+  console.log("🔔 create-checkout-session body:", { amount, userId, items, customerName, isTakeaway });
+
+  // Validate items/amount
+  if ((!Array.isArray(items) || items.length === 0) && !amount) {
+    return res.status(400).json({ error: "No items or amount provided" });
+  }
 
   try {
+    // Build line_items safely. Expect item.price and item.quantity in RUPEES and units.
+    const line_items = (Array.isArray(items) && items.length > 0)
+      ? items.map(item => {
+          const priceRupees = Number(item.price || 0);
+          return {
+            price_data: {
+              currency: "inr",
+              product_data: { name: item.name || "SwadBite Item" },
+              unit_amount: Math.round(priceRupees * 100), // RUPEES -> PAISE
+            },
+            quantity: Number(item.quantity) || 1,
+          };
+        })
+      : [{
+          price_data: {
+            currency: "inr",
+            product_data: { name: "SwadBite Order" },
+            unit_amount: Math.round(Number(amount || 0) * 100), // RUPEES -> PAISE fallback
+          },
+          quantity: 1
+        }];
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      line_items: items.map(item => ({
-        price_data: {
-          currency: "inr",
-          product_data: { name: item.name },
-          unit_amount: Math.round(item.price * 100),
-        },
-        quantity: item.quantity || 1,
-      })),
+      line_items,
       mode: "payment",
       success_url: "https://swad-bite.vercel.app/payment/success",
       cancel_url: "https://swad-bite.vercel.app/payment/fail",
     });
 
+    console.log("✅ Stripe session created:", session.id);
+
+    // Save order (catch DB errors but don't block returning the session)
     const newOrder = new Order({
       userId,
       customerName,
       isTakeaway,
       paymentMethod: "card",
-      totalAmount: amount / 100,
+      totalAmount: Number(amount) || // rupees
+                  (line_items.reduce((s, li) => s + (li.price_data.unit_amount * li.quantity), 0) / 100),
       items,
       stripeSessionId: session.id,
       status: "pending",
     });
 
-    await newOrder.save();
-    res.json({ id: session.id });
-  } catch (error) {
-    console.error("Stripe Error:", error);
-    res.status(500).json({ error: error.message });
+    try {
+      await newOrder.save();
+      console.log("✅ Order saved to DB");
+    } catch (dbErr) {
+      console.error("DB Save Error (non-fatal):", dbErr.message);
+      // do not return 500 if DB save fails — still return session id
+    }
+
+    return res.json({ id: session.id });
+  } catch (err) {
+    // Log raw for debugging
+    console.error("Stripe Error (create-checkout-session):", err);
+    return res.status(500).json({ error: err.raw?.message || err.message || "Stripe error" });
   }
 });
+
 
 // ----------------- STRIPE WEBHOOK -----------------
 router.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {

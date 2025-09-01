@@ -13,8 +13,27 @@ const userRoutes = require('./routes/UserRouter');
 
 const app = express();
 
-// // Webhook needs raw body
-// app.use("/api/stripe/webhook", stripeRoutes); // raw body inside route
+// server.js — put this BEFORE app.use(express.json())
+const stripeRaw = express.raw({ type: "application/json" });
+
+app.post("/api/stripe/webhook", stripeRaw, (req, res) => {
+  const sig = req.headers["stripe-signature"];
+  try {
+    const event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    // handle event types
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      // Update order in DB (non-blocking)
+      Order.findOneAndUpdate({ stripeSessionId: session.id }, { status: "paid" }, { new: true })
+        .then(o => console.log("✅ Order marked paid via webhook:", o))
+        .catch(e => console.error("Webhook DB update error:", e));
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error("Webhook signature verification failed:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+});
 
 // Middleware
 app.use(cors());
