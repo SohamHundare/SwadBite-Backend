@@ -1,7 +1,6 @@
 const express = require("express");
 const Stripe = require("stripe");
 const dotenv = require("dotenv");
-//new
 const Order = require("../models/Order");
 
 dotenv.config();
@@ -12,8 +11,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // routes/stripeRoutes.js (replace the POST handler)
 router.post("/create-checkout-session", async (req, res) => {
-  const { amount, userId, items = [], customerName, isTakeaway } = req.body;
-  console.log("🔔 create-checkout-session body:", { amount, userId, items, customerName, isTakeaway });
+  const { amount, userId, items = [], customerName, deliveryAddress, isTakeaway } = req.body;
+  console.log("🔔 create-checkout-session body:", { amount, userId, items, customerName, deliveryAddress, isTakeaway });
 
   // Validate items/amount
   if ((!Array.isArray(items) || items.length === 0) && !amount) {
@@ -26,7 +25,7 @@ router.post("/create-checkout-session", async (req, res) => {
       ? items.map(item => {
           const priceRupees = Number(item.price || 0);
           return {
-            price_data: {
+            price_data: {                                  
               currency: "inr",
               product_data: { name: item.name || "SwadBite Item" },
               unit_amount: Math.round(priceRupees * 100), // RUPEES -> PAISE
@@ -37,7 +36,7 @@ router.post("/create-checkout-session", async (req, res) => {
       : [{
           price_data: {
             currency: "inr",
-            product_data: { name: "SwadBite Order" },
+            product_data: { name: item.name || "SwadBite Order" },
             unit_amount: Math.round(Number(amount || 0) * 100), // RUPEES -> PAISE fallback
           },
           quantity: 1
@@ -57,6 +56,7 @@ router.post("/create-checkout-session", async (req, res) => {
     const newOrder = new Order({
       userId,
       customerName,
+      deliveryAddress,
       isTakeaway,
       paymentMethod: "card",
       totalAmount: Number(amount) || // rupees
@@ -90,6 +90,7 @@ router.post("/webhook", express.raw({ type: "application/json" }), (req, res) =>
   let event;
   try {
     event = stripe.webhooks.constructEvent(
+  
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
